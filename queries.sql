@@ -107,3 +107,81 @@ FROM (
     GROUP BY 
     e.first_name, e.last_name, weekday, number
     ORDER BY 4, 1) as t;
+------
+
+--шаг 6
+--Первый отчет - количество покупателей в разных возрастных группах: 10-15, 16-25, 26-40 и 40+. 
+--Итоговая таблица должна быть отсортирована по возрастным группам и содержать следующие поля:
+--age_category - возрастная группа
+--count - количество человек в группе
+
+WITH tab_1 AS 
+(
+    SELECT 
+    *,
+        CASE 
+	        WHEN age BETWEEN 0 AND 15 THEN '15-'
+            WHEN age BETWEEN 16 AND 25 THEN '16-25' 
+            WHEN age BETWEEN 26 AND 40 THEN '26-40' 
+            ELSE '40+' 
+        END AS age_categories
+    FROM customers
+)
+SELECT 
+    age_categories,
+    COUNT(*) AS count
+FROM tab_1
+GROUP BY age_categories
+order by age_categories;
+--------
+
+--Во втором отчете предоставьте данные по количеству уникальных покупателей и выручке, которую они принесли. 
+--Сгруппируйте данные по дате, которая представлена в числовом виде ГОД-МЕСЯЦ. Итоговая таблица должна быть отсортирована 
+--по дате по возрастанию и содержать следующие поля:
+--date - дата в указанном формате
+--total_customers - количество покупателей
+--income - принесенная выручка
+
+SELECT 
+    TO_CHAR(DATE_TRUNC('month', s.sale_date), 'YYYY-MM') AS date,
+    COUNT(DISTINCT s.customer_id) AS total_customers,
+    SUM(s.quantity * p.price) AS income
+FROM 
+    sales s
+LEFT JOIN 
+    products p ON s.product_id = p.product_id 
+GROUP BY 
+    DATE_TRUNC('month', s.sale_date)
+ORDER BY 
+    date ASC;
+---------------------
+
+--Третий отчет следует составить о покупателях, первая покупка которых была в ходе проведения акций 
+--(акционные товары отпускали со стоимостью равной 0). Итоговая таблица должна быть отсортирована по id покупателя и дате покупки. Таблица состоит из следующих полей:
+--customer - имя и фамилия покупателя
+--sale_date - дата покупки
+--seller - имя и фамилия продавца
+
+SELECT 
+    sub.customer,
+    sub.sale_date,
+    sub.seller
+FROM 
+    (
+        SELECT 
+            CONCAT(c.first_name, ' ', c.last_name) AS customer,
+            s.sale_date,
+            CONCAT(e.first_name, ' ', e.last_name) AS seller,
+            ROW_NUMBER() OVER (PARTITION BY c.customer_id ORDER BY s.sale_date) AS rn
+        FROM 
+            sales s
+            INNER JOIN customers c ON s.customer_id = c.customer_id
+            INNER JOIN employees e ON s.sales_person_id = e.employee_id
+            INNER JOIN products p ON s.product_id = p.product_id
+        WHERE 
+            p.price = 0
+    ) sub
+WHERE 
+    sub.rn = 1
+ORDER BY 
+    sub.customer, sub.sale_date;
